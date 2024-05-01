@@ -1,7 +1,35 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from django.shortcuts import get_object_or_404
+from django.http import Http404
 
 User = get_user_model()
+
+
+class PostQuerySet(models.QuerySet):
+    def post_published(self):
+        return self.filter(
+            pub_date__lte=timezone.now(),
+            is_published=True,
+            category__is_published=True
+        )
+
+    def get_published_post(self, post_id):
+        post = get_object_or_404(Post, id=post_id)
+        if (not post.is_published
+                or not post.category.is_published
+                or post.pub_date > timezone.now()):
+            raise Http404('Страница не найдена')
+        return post
+
+
+class CategoryQuerySet(models.QuerySet):
+    def category_post(self, slug):
+        category = get_object_or_404(Category, slug=slug)
+        if not category.is_published:
+            raise Http404('Страница не найдена')
+        return category
 
 
 class Category(models.Model):
@@ -22,6 +50,8 @@ class Category(models.Model):
         help_text='Снимите галочку, чтобы скрыть публикацию.')
     created_at = models.DateTimeField(
         auto_now_add=True, verbose_name='Добавлено', null=False)
+
+    objects = CategoryQuerySet.as_manager()
 
     class Meta:
         verbose_name = 'категория'
@@ -88,7 +118,10 @@ class Post(models.Model):
     created_at = models.DateTimeField(
         auto_now_add=True, verbose_name='Добавлено', null=False)
 
+    objects = PostQuerySet.as_manager()
+
     class Meta:
+        ordering = ['-pub_date']
         verbose_name = 'публикация'
         verbose_name_plural = 'Публикации'
 
